@@ -30,6 +30,11 @@ rm *.fastq.gz
 #TransDecoder.Predict -t T47D_trinity.Trinity.fasta --retain_blastp_hits blastp.outfmt6
 
 # GENOME guided assembly - map the reads
- STAR --genomeDir ../star_indicies/ --limitGenomeGenerateRAM 5554136874 --limitBAMsortRAM 5554136874 --runThreadN 8 --outSAMtype BAM SortedByCoordinate --outFilterMismatchNmax 7  --outFilterMultimapNmax 5 --outFileNamePrefix T47D --readFilesIn  T47D_paired_1.fq T47D_paired_2.fq
+ #STAR --genomeDir ../star_indicies/ --limitGenomeGenerateRAM 5554136874 --limitBAMsortRAM 5554136874 --runThreadN 8 --outSAMtype BAM SortedByCoordinate --outFilterMismatchNmax 7  --outFilterMultimapNmax 5 --outFileNamePrefix T47D --readFilesIn  T47D_paired_1.fq T47D_paired_2.fq
 # GENOME guided assembly. Assemble from the mapped reads
- Trinity --genome_guided_bam T47DAligned.sortedByCoord.out.bam --genome_guided_max_intron 10000 --max_memory 10G --CPU 12 --max_memory 100G --full_cleanup --output T47D_GG_Trinity --genome_guided_min_coverage 5
+ #Trinity --genome_guided_bam T47DAligned.sortedByCoord.out.bam --genome_guided_max_intron 10000 --max_memory 10G --CPU 12 --max_memory 100G --full_cleanup --output T47D_GG_Trinity --genome_guided_min_coverage 5
+cp ./T47D_GG_Trinity/Trinity-GG.fasta ./T47D_GG.fasta
+TransDecoder.LongOrfs -t T47D_GG.fasta
+diamond blastp --query ./*/longest_orfs.pep --db /gpfs1/scratch/bioinf/db/databases/uniprot.dmnd --threads 8 --max-target-seqs 1 --outfmt 6 -o blastp.outfmt6
+TransDecoder.Predict -t T47D_GG.fasta --retain_blastp_hits blastp.outfmt6
+

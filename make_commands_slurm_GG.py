@@ -86,11 +86,17 @@ for entry in info_table:
     
     f_out.write("# GENOME guided assembly - map the reads\n ")
     #STAR --runMode genomeGenerate --runThreadN 4 --limitGenomeGenerateRAM 259760745173 --genomeDir ./star_indicies --genomeFastaFiles Homo_sapiens.GRCh38.dna.toplevel.fa
-    star_cmd = "STAR --genomeDir ../star_indicies/ --limitGenomeGenerateRAM 5554136874 --limitBAMsortRAM 5554136874 --runThreadN 8 --outSAMtype BAM SortedByCoordinate --outFilterMismatchNmax 7  --outFilterMultimapNmax 5 --outFileNamePrefix %s --readFilesIn  %s_paired_1.fq %s_paired_2.fq\n" %(cell_line, cell_line, cell_line)
+    star_cmd = "#STAR --genomeDir ../star_indicies/ --limitGenomeGenerateRAM 5554136874 --limitBAMsortRAM 5554136874 --runThreadN 8 --outSAMtype BAM SortedByCoordinate --outFilterMismatchNmax 7  --outFilterMultimapNmax 5 --outFileNamePrefix %s --readFilesIn  %s_paired_1.fq %s_paired_2.fq\n" %(cell_line, cell_line, cell_line)
     f_out.write(star_cmd)
     f_out.write("# GENOME guided assembly. Assemble from the mapped reads\n ")
-    gg_cmd = "Trinity --genome_guided_bam %sAligned.sortedByCoord.out.bam --genome_guided_max_intron 10000 --max_memory 10G --CPU 12 --max_memory 100G --full_cleanup --output %s_GG_Trinity --genome_guided_min_coverage 5\n" % (cell_line, cell_line)
-    f_out.write(gg_cmd)    
+    gg_cmd = "#Trinity --genome_guided_bam %sAligned.sortedByCoord.out.bam --genome_guided_max_intron 10000 --max_memory 10G --CPU 12 --max_memory 100G --full_cleanup --output %s_GG_Trinity --genome_guided_min_coverage 5\n" % (cell_line, cell_line)
+    f_out.write(gg_cmd)
+    cp_cmd = "cp ./%s_GG_Trinity/Trinity-GG.fasta ./%s_GG.fasta\n" % (cell_line, cell_line)
+    f_out.write(cp_cmd)
+    f_out.write("TransDecoder.LongOrfs -t %s_GG.fasta\n" % cell_line)
+    f_out.write("diamond blastp --query ./*/longest_orfs.pep --db /gpfs1/scratch/bioinf/db/databases/uniprot.dmnd --threads 8 --max-target-seqs 1 --outfmt 6 -o blastp.outfmt6\n")
+    f_out.write("TransDecoder.Predict -t %s_GG.fasta --retain_blastp_hits blastp.outfmt6\n\n" % cell_line)
+
     
 
 

@@ -30,6 +30,11 @@ rm *.fastq.gz
 #TransDecoder.Predict -t SKBR3_trinity.Trinity.fasta --retain_blastp_hits blastp.outfmt6
 
 # GENOME guided assembly - map the reads
- STAR --genomeDir ../star_indicies/ --limitGenomeGenerateRAM 5554136874 --limitBAMsortRAM 5554136874 --runThreadN 8 --outSAMtype BAM SortedByCoordinate --outFilterMismatchNmax 7  --outFilterMultimapNmax 5 --outFileNamePrefix SKBR3 --readFilesIn  SKBR3_paired_1.fq SKBR3_paired_2.fq
+ #STAR --genomeDir ../star_indicies/ --limitGenomeGenerateRAM 5554136874 --limitBAMsortRAM 5554136874 --runThreadN 8 --outSAMtype BAM SortedByCoordinate --outFilterMismatchNmax 7  --outFilterMultimapNmax 5 --outFileNamePrefix SKBR3 --readFilesIn  SKBR3_paired_1.fq SKBR3_paired_2.fq
 # GENOME guided assembly. Assemble from the mapped reads
- Trinity --genome_guided_bam SKBR3Aligned.sortedByCoord.out.bam --genome_guided_max_intron 10000 --max_memory 10G --CPU 12 --max_memory 100G --full_cleanup --output SKBR3_GG_Trinity --genome_guided_min_coverage 5
+ #Trinity --genome_guided_bam SKBR3Aligned.sortedByCoord.out.bam --genome_guided_max_intron 10000 --max_memory 10G --CPU 12 --max_memory 100G --full_cleanup --output SKBR3_GG_Trinity --genome_guided_min_coverage 5
+cp ./SKBR3_GG_Trinity/Trinity-GG.fasta ./SKBR3_GG.fasta
+TransDecoder.LongOrfs -t SKBR3_GG.fasta
+diamond blastp --query ./*/longest_orfs.pep --db /gpfs1/scratch/bioinf/db/databases/uniprot.dmnd --threads 8 --max-target-seqs 1 --outfmt 6 -o blastp.outfmt6
+TransDecoder.Predict -t SKBR3_GG.fasta --retain_blastp_hits blastp.outfmt6
+

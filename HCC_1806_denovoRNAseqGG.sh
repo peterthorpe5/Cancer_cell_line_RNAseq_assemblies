@@ -30,6 +30,11 @@ rm *.fastq.gz
 #TransDecoder.Predict -t HCC_1806_trinity.Trinity.fasta --retain_blastp_hits blastp.outfmt6
 
 # GENOME guided assembly - map the reads
- STAR --genomeDir ../star_indicies/ --limitGenomeGenerateRAM 5554136874 --limitBAMsortRAM 5554136874 --runThreadN 8 --outSAMtype BAM SortedByCoordinate --outFilterMismatchNmax 7  --outFilterMultimapNmax 5 --outFileNamePrefix HCC_1806 --readFilesIn  HCC_1806_paired_1.fq HCC_1806_paired_2.fq
+ #STAR --genomeDir ../star_indicies/ --limitGenomeGenerateRAM 5554136874 --limitBAMsortRAM 5554136874 --runThreadN 8 --outSAMtype BAM SortedByCoordinate --outFilterMismatchNmax 7  --outFilterMultimapNmax 5 --outFileNamePrefix HCC_1806 --readFilesIn  HCC_1806_paired_1.fq HCC_1806_paired_2.fq
 # GENOME guided assembly. Assemble from the mapped reads
- Trinity --genome_guided_bam HCC_1806Aligned.sortedByCoord.out.bam --genome_guided_max_intron 10000 --max_memory 10G --CPU 12 --max_memory 100G --full_cleanup --output HCC_1806_GG_Trinity --genome_guided_min_coverage 5
+ #Trinity --genome_guided_bam HCC_1806Aligned.sortedByCoord.out.bam --genome_guided_max_intron 10000 --max_memory 10G --CPU 12 --max_memory 100G --full_cleanup --output HCC_1806_GG_Trinity --genome_guided_min_coverage 5
+cp ./HCC_1806_GG_Trinity/Trinity-GG.fasta ./HCC_1806_GG.fasta
+TransDecoder.LongOrfs -t HCC_1806_GG.fasta
+diamond blastp --query ./*/longest_orfs.pep --db /gpfs1/scratch/bioinf/db/databases/uniprot.dmnd --threads 8 --max-target-seqs 1 --outfmt 6 -o blastp.outfmt6
+TransDecoder.Predict -t HCC_1806_GG.fasta --retain_blastp_hits blastp.outfmt6
+
