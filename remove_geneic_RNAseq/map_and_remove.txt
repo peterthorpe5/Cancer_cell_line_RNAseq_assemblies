@@ -1,0 +1,13 @@
+##the genome guided RNAseq assemblies were mapped back to GRCH38
+
+
+
+blat  ../Homo_sapiens.GRCh38.dna_sm.primary_assembly.fa HCC_1395_GG.fasta -q=dna -t=dna -out=psl -extendThroughN HCC_1395_vs_GRCh38.psl
+
+
+the psl was converted to gff using 
+http://eugenes.org/gmod/tandy/blat2gff.pl
+
+bedtools was used to find those mapping which do not itersect with the genes are defined in the gene predictions. 
+
+Thus leaving putative ncRNA. 
