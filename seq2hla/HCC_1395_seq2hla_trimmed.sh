@@ -5,7 +5,7 @@
 #SBATCH --mem=60GB
 cd /gpfs1/scratch/bioinf/pjt6/cancer_genomes/seq2hla
 # make a folder of the cell name
-mkdir HCC_1395
-cd ./HCC_1395
+mkdir HCC_1395_trimmed
+cd ./HCC_1395_trimmed
 conda activate seq2HLA
 seq2HLA -1 ../HCC_1395_paired_1.fq.gz -2 ../HCC_1395_paired_2.fq.gz -r HCC_1395_trimmed -p 16 

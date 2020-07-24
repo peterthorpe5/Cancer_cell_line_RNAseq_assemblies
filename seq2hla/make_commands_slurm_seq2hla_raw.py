@@ -48,9 +48,9 @@ for entry in info_table:
     f_out.write("#SBATCH --mem=60GB\n")
     f_out.write("cd /gpfs1/scratch/bioinf/pjt6/cancer_genomes/seq2hla\n")
 
-    mkdir = "# make a folder of the cell name\nmkdir %s\n" % cell_line
+    mkdir = "# make a folder of the cell name\nmkdir %s_Raw\n" % cell_line
     f_out.write(mkdir)
-    cd_into = "cd ./%s\n" % cell_line
+    cd_into = "cd ./%s_Raw\n" % cell_line
     f_out.write(cd_into)
 
     conda = "conda activate seq2HLA\n"

@@ -5,7 +5,7 @@
 #SBATCH --mem=60GB
 cd /gpfs1/scratch/bioinf/pjt6/cancer_genomes/seq2hla
 # make a folder of the cell name
-mkdir ZR751
-cd ./ZR751
+mkdir ZR751_trimmed
+cd ./ZR751_trimmed
 conda activate seq2HLA
 seq2HLA -1 ../ZR751_paired_1.fq.gz -2 ../ZR751_paired_2.fq.gz -r ZR751_trimmed -p 16 
