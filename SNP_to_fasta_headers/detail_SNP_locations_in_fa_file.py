@@ -390,13 +390,15 @@ if __name__ == '__main__':
                     seen_gene2.add(gene)
                     logger.warning("%s failed", gene)
                     logger.info("failed sequences: \nWT:\n%s \nALT:\n%s", wt_seq, alt_seq)
-                    # list comp to find all the changes
-                    # this is often the most complex changes that are not found above
-                    output_list = [(s, count) for s in
-                                   enumerate(difflib.ndiff(wt_seq, alt_seq))
-                                   if s[0] != ' ']
+
                     # dont log this by default - too much info
                     if args.show_all.upper() != "NO":
+                        # list comp to find all the changes
+                        # this is often the most complex changes that are not found above
+                        output_list = [(s, count) for s in
+                                       enumerate(difflib.ndiff(wt_seq,
+                                                               alt_seq))
+                                       if s[0] != ' ']
                         logger.info("%s has these changes:\n %s ",
                                     gene, str(output_list))
                     gene_description_location[gene].add("\tmany_chages_to_" +
