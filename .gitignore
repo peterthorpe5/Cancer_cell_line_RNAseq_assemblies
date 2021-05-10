@@ -22,6 +22,14 @@ test_out.log
 tests/test_out*
 error.log
 
+Homo_sapiens.GRCh38.99.gff3
+Homo_sapiens.GRCh38.cds.all.fa2
+human_genes_sorted.gff
+MDAMB231_H1_SNPs_reconstruct.q30.mindp3.WARNINGS.log
+MDAMB231_Snpeff.vcf
+results-summary.txt
+MDAMB231_filtered.q30.mindp3.vcf.recode2
+
 # Exclude OSX files
 .DS_Store
 
