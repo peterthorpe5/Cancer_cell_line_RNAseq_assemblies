@@ -57,13 +57,13 @@ def get_args():
     optional = parser.add_argument_group('optional arguments')
     optional.add_argument("--wt", dest='wt',
                           action="store",
-                          default="Homo_sapiens.GRCh38.cds.all.fa",
+                          default="Homo_sapiens.GRCh38.cds.all.fa2",
                           type=str,
                           help="the ref human proteins ")
 
     optional.add_argument("--vcf", dest='vcf',
                           action="store",
-                          default="MDAMB231_filtered.q30.mindp3.vcf.recode.vcf",
+                          default="MDAMB231_filtered.q30.mindp3.vcf.recode2",
                           type=str,
                           help="vcf file with the snps detailed. Has to be against the genes only" +
                           " this will not do any filtering")
@@ -84,7 +84,7 @@ def get_args():
 
     optional.add_argument("--cancer_fa", dest='cancer_fa',
                           action="store",
-                          default="MDAMB231_H1_SNPs_reconstruct.q30.mindp3.fasta",
+                          default="MDAMB231_H1_SNPs_reconstruct.q30.mindp3.fasta2",
                           type=str,
                           help="the reconstructed fa using the ref and vcf using bcftools")
 
@@ -148,13 +148,16 @@ def parse_snpeff_vcf(vcf):
                         continue
                     try:
                         SNP_type = useful_info.split("|")[0]
+                        
                         SNP_impact = useful_info.split("|")[1]
                         gene_code = useful_info.split("|")[2]
                         gene_pos = gene_code + "_" + POS
                         data = "%s\t%s\t%s\t%s" % (gene_code,
                                                    POS, SNP_type,
                                                    SNP_impact)
-                        gene_to_snp_type[gene].append(data)
+                        gene_to_snp_type[gene_code].append(data)
+                        # BREAKING HERE!! GENE?
+                        # print(gene_code, SNP_type)
                     except:
                         continue
                 except:
@@ -261,19 +264,18 @@ if __name__ == '__main__':
     logger.info(sys.version_info)
     logger.info("Command-line: %s", ' '.join(sys.argv))
     logger.info("Starting: %s", time.asctime())
+    
     # check the files exist
     file_list = [args.wt, args.cancer_fa,
                  args.vcf, args. snp_vcf,
                  args.gff]
+    
     for user_file in file_list:
         if not os.path.isfile(user_file):
            logger.warning("file not found: %s", user_file)
            os._exit(0)
     # collect data for the WT .fa
    
-
-    logger.info("parsing gff file")
-    gene_to_name = parse_gff(args.gff)
     logger.info("Indexing... %s", args.wt)
     wt_nt =  SeqIO.index(args.wt, "fasta")
     # collect data for the reconstructed .fa
@@ -288,7 +290,12 @@ if __name__ == '__main__':
    
     # print(gene_to_snp_type)
     # quick look at the dict
-    print(dict(list(gene_to_snp_type.items())[:3]))
+    logger.info("SNP type quick look")
+    logger.info((dict(list(gene_to_snp_type.items())[:3])))
+
+    
+    logger.info("parsing gff file")
+    gene_to_name = parse_gff(args.gff)
 
     # collect the REF protein seq
     REF_gene_to_amino_acid, wt_gene_names = translate(args.wt)
@@ -298,15 +305,25 @@ if __name__ == '__main__':
     # iterate through the genes and compare what bcftools did
     # bcftools will not output all variants, so using vcf here
     # may not help!!
-
+    # open the outfile
+    f_out = open(args.out, "w")
     logger.info("comparing REF amino acids to ALT amino acids")
     # dict to capture to relavant info
     gene_description_location = defaultdict(set)
+    seen_gene = set()
+
+    # iterate through 
     for gene_pos, info in gene_snp_location.items():
         gene, POS, REF, ALT = info.split()
+        if gene in seen_gene:
+            continue
+        seen_gene.add(gene)
+        
         # get the nucleotide seqs
         wt_seq = wt_nt[gene]
         wt_sequence = str(wt_seq.seq)
+        
+        # for the alt
         alt_seq = alt_nt[gene]
         alt_sequence = str(alt_seq.seq)
 
@@ -314,6 +331,10 @@ if __name__ == '__main__':
         wt_seq = REF_gene_to_amino_acid[gene]
         # get the mutant seq
         alt_seq = ALT_gene_to_amino_acid[gene]
+        if wt_seq.upper() == alt_seq.upper():
+            #alt_seq_record = ALT_gene_to_amino_acid[gene]
+            #SeqIO.write(alt_seq_record, f_out, "fasta")
+            continue
         for count, s in enumerate(difflib.ndiff(wt_seq, alt_seq)): #  this takes too long
             if s[0] == ' ':
                 continue
@@ -326,31 +347,41 @@ if __name__ == '__main__':
 
                     if wt_seq[count] == alt_seq[count]: # sometimes it is lying to me!!
                         continue
-                    protien_sub = "p_%s%d%s" % (wt_seq[count], count, alt_seq[count])
-                    nucleo_sub = "c_%s%d%s" % (wt_sequence[(count +1)*3],
-                                               (count +1)*3,
-                                               alt_sequence[(count +1)*3])
+                    protien_sub = "p_%s%d%s" % (wt_seq[count], count,
+                                                alt_seq[count])
+                    nt_count = (count +1)*3
+                    nucleo_sub = "c_%s%d%s" % (wt_sequence[nt_count],
+                                               nt_count,
+                                               alt_sequence[nt_count])
                     seq_of_int = wt_seq[count - 4: count + 4]
                     # print(protien_sub)
                     # need to get the stupid other names
-                    print(gene.split(".")[0])
+                    # print(gene.split(".")[0])
                     name = gene_to_name[gene.split(".")[0]]
+                    # snp eff name do not have - in them
+                    name =  name.split("-")[0]
+                    # print(name)
                     # get the SNPeff stuff
                     snp_eff_data = gene_to_snp_type[name]
-                    print("gene", gene, "name", name)
-                    print(snp_eff_data)
+                    # print("gene", gene, "name", name)
+                    #print(snp_eff_data)
                     temp = ""
                     for i in snp_eff_data:
                         temp = temp + " " + i
-                    out_data = "%s|%s|%s|%s|" % (nucleo_sub, protien_sub, seq_of_int, temp)
+                        # print(i)
+                    out_data = "\t%s|%s|%s|%s|" % (nucleo_sub, protien_sub,
+                                                   seq_of_int, temp)
                     gene_description_location[gene].add(out_data)
                 except:
                     this_fails = "warning" #  usually here - if not wt_seq[count]:
                     continue
 
-    f_out = open(arg.out, "w")
+    logger.info("finished comparing. Will now output the data")
     for gene in alt_gene_names:
-        alt_seq_record = ALT_gene_to_amino_acid[gene]
+        alt_seq_record = alt_nt[gene]
+        alt_seq_record_AA = ALT_gene_to_amino_acid[gene]
+        alt_seq_record.seq = alt_seq_record_AA
+        # print(alt_seq_record)
         SNP_info = gene_description_location[gene]
         temp = ""
         for entry in SNP_info:
@@ -358,6 +389,7 @@ if __name__ == '__main__':
         alt_seq_record.description = alt_seq_record.description  + temp
         SeqIO.write(alt_seq_record, f_out, "fasta")
     f_out.close()
+    logger.info("finished")
 
 
 
