@@ -11,7 +11,6 @@ from collections import defaultdict
 from Bio.Seq import Seq
 from Bio import SeqIO
 import time
-import os
 import errno
 import logging
 import logging.handlers
@@ -32,7 +31,6 @@ if sys.version_info[:1] != (3,):
            "  version of python")
     raise ImportError("Python 3.x is now required for this .py")
     print ("did you activate the virtual environment?")
-    print ("this is to deal with module imports")
     sys.exit(1)
 
 usage = """
@@ -67,7 +65,7 @@ def get_args():
                           type=str,
                           help="vcf file with the snps detailed. Has to be against the genes only" +
                           " this will not do any filtering")
-    
+
     optional.add_argument("--snp_eff_vcf", dest='snp_vcf',
                           action="store",
                           default="MDAMB231_Snpeff.vcf",
@@ -94,6 +92,13 @@ def get_args():
                           type=str,
                           help="the tab file to fill in. Input file")
 
+    optional.add_argument("--show_all", dest='show_all',
+                          action="store",
+                          default="NO",
+                          type=str,
+                          help="option to show the diff in those seq that fail " +
+                          "note difflib doesnt work for all seq, dont know why")
+
     optional.add_argument("-h", "--help",
                           action="help",
                           default=argparse.SUPPRESS,
@@ -113,7 +118,7 @@ def test_line(line):
         return False  # if the last line is blank
     if line.startswith("#"):
         return False  # comment line
-    if line.startswith("    # "):  # swarm result file
+    if line.startswith("    # "):
         return False  # comment line
     if line.startswith("		p"):
         return False  # comment line
@@ -121,11 +126,10 @@ def test_line(line):
 
 
 def split_line(line):
-    """split line"""
+    """split line -  not used"""
     # was [1] for thapbi data
-    CHROM, POS, ID, REF, ALT, QUAL, FILTER, INFO
-
-    return line.split
+    # CHROM, POS, ID, REF, ALT, QUAL, FILTER, INFO
+    return line.split()
 
 
 def parse_snpeff_vcf(vcf):
@@ -143,13 +147,12 @@ def parse_snpeff_vcf(vcf):
                        FORMAT, unknown = line.split()
                 # print(INFO.split(";ANN=C|"))
                 try:
-                    # useful_info = INFO.split(";ANN=C|")[1]
                     useful_info = INFO.split(";ANN=")[1]
                     if (len(useful_info.split("|"))) < 4:
                         continue
                     try:
                         SNP_type = useful_info.split("|")[1]
-                        
+
                         SNP_impact = useful_info.split("|")[2]
                         gene_code = useful_info.split("|")[3]
                         gene_pos = gene_code + "_" + POS
@@ -157,8 +160,6 @@ def parse_snpeff_vcf(vcf):
                                                    POS, SNP_type,
                                                    SNP_impact)
                         gene_to_snp_type[gene_code].append(data)
-                        # BREAKING HERE!! GENE?
-                        # print(gene_code, SNP_type)
                     except:
                         continue
                 except:
@@ -187,10 +188,16 @@ def parse_vcf(vcf):
 
 def parse_gene_info(gene_info, in_dict):
     """column 9 of the human gff.
-eg: ID=gene:ENSG00000187961;Name=KLHL17;biotype=protein_coding;description=kelch like family member 17 [Source:HGNC Symbol%3BAcc:HGNC:24023];gene_id=ENSG00000187961;logic_name=ensembl_havana_gene_homo_sapiens;version=14
+eg: ID=gene:ENSG00000187961;Name=KLHL17;biotype=protein_coding;
+description=kelch like family member 17
+[Source:HGNC Symbol%3BAcc:HGNC:24023];gene_id=ENSG00000187961;
+logic_name=ensembl_havana_gene_homo_sapiens;version=14
 
-    we want to extract ID=gene:ENSG00000187961
-    Name=KLHL17
+    we want to extract
+        ID=gene:ENSG00000187961
+        Name=KLHL17
+
+    returns a dictionary. gen name to actual name
     """
     data = gene_info.split(";")
     transcript = data[0].replace("ID=transcript:", "")
@@ -261,22 +268,23 @@ if __name__ == '__main__':
         logger.error("Could not open %s for logging" %
                      logfile)
         sys.exit(1)
+
     # Report input arguments
     logger.info(sys.version_info)
     logger.info("Command-line: %s", ' '.join(sys.argv))
     logger.info("Starting: %s", time.asctime())
-    
+
     # check the files exist
     file_list = [args.wt, args.cancer_fa,
                  args.vcf, args. snp_vcf,
                  args.gff]
-    
+
     for user_file in file_list:
         if not os.path.isfile(user_file):
            logger.warning("file not found: %s", user_file)
            os._exit(0)
     # collect data for the WT .fa
-   
+
     logger.info("Indexing... %s", args.wt)
     wt_nt =  SeqIO.index(args.wt, "fasta")
     # collect data for the reconstructed .fa
@@ -288,13 +296,13 @@ if __name__ == '__main__':
     gene_snp_location = parse_vcf(args.vcf)
     logger.info("Indexing... %s", args.snp_vcf)
     gene_to_snp_type = parse_snpeff_vcf(args.snp_vcf)
-   
+
     # print(gene_to_snp_type)
     # quick look at the dict
     logger.info("SNP type quick look")
-    logger.info((dict(list(gene_to_snp_type.items())[:3])))
+    logger.info((dict(list(gene_to_snp_type.items())[:1])))
 
-    
+
     logger.info("parsing gff file")
     gene_to_name = parse_gff(args.gff)
 
@@ -312,18 +320,18 @@ if __name__ == '__main__':
     # dict to capture to relavant info
     gene_description_location = defaultdict(set)
     seen_gene = set()
-
-    # iterate through 
+    seen_gene2 = set()
+    # iterate through
     for gene_pos, info in gene_snp_location.items():
         gene, POS, REF, ALT = info.split()
         if gene in seen_gene:
             continue
         seen_gene.add(gene)
-        
+
         # get the nucleotide seqs
         wt_seq = wt_nt[gene]
         wt_sequence = str(wt_seq.seq)
-        
+
         # for the alt
         alt_seq = alt_nt[gene]
         alt_sequence = str(alt_seq.seq)
@@ -332,6 +340,7 @@ if __name__ == '__main__':
         wt_seq = REF_gene_to_amino_acid[gene]
         # get the mutant seq
         alt_seq = ALT_gene_to_amino_acid[gene]
+
         if wt_seq.upper() == alt_seq.upper():
             gene_description_location[gene].add("\tno_amino_acid_change")
             #alt_seq_record = ALT_gene_to_amino_acid[gene]
@@ -376,6 +385,22 @@ if __name__ == '__main__':
                     gene_description_location[gene].add(out_data)
                 except:
                     this_fails = "warning" #  usually here - if not wt_seq[count]:
+                    if gene in seen_gene2:
+                        continue
+                    seen_gene2.add(gene)
+                    logger.warning("%s failed", gene)
+                    logger.info("failed sequences: \nWT:\n%s \nALT:\n%s", wt_seq, alt_seq)
+                    # list comp to find all the changes
+                    # this is often the most complex changes that are not found above
+                    output_list = [(s, count) for s in
+                                   enumerate(difflib.ndiff(wt_seq, alt_seq))
+                                   if s[0] != ' ']
+                    # dont log this by default - too much info
+                    if args.show_all.upper() != "NO":
+                        logger.info("%s has these changes:\n %s ",
+                                    gene, str(output_list))
+                    gene_description_location[gene].add("\tmany_chages_to_" +
+                                                        "detail_indels_or_difflib_err")
                     continue
 
     logger.info("finished comparing. Will now output the data")
