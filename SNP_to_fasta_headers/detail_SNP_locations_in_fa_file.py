@@ -143,14 +143,15 @@ def parse_snpeff_vcf(vcf):
                        FORMAT, unknown = line.split()
                 # print(INFO.split(";ANN=C|"))
                 try:
-                    useful_info = INFO.split(";ANN=C|")[1]
+                    # useful_info = INFO.split(";ANN=C|")[1]
+                    useful_info = INFO.split(";ANN=")[1]
                     if (len(useful_info.split("|"))) < 4:
                         continue
                     try:
-                        SNP_type = useful_info.split("|")[0]
+                        SNP_type = useful_info.split("|")[1]
                         
-                        SNP_impact = useful_info.split("|")[1]
-                        gene_code = useful_info.split("|")[2]
+                        SNP_impact = useful_info.split("|")[2]
+                        gene_code = useful_info.split("|")[3]
                         gene_pos = gene_code + "_" + POS
                         data = "%s\t%s\t%s\t%s" % (gene_code,
                                                    POS, SNP_type,
@@ -332,6 +333,7 @@ if __name__ == '__main__':
         # get the mutant seq
         alt_seq = ALT_gene_to_amino_acid[gene]
         if wt_seq.upper() == alt_seq.upper():
+            gene_description_location[gene].add("\tno_amino_acid_change")
             #alt_seq_record = ALT_gene_to_amino_acid[gene]
             #SeqIO.write(alt_seq_record, f_out, "fasta")
             continue
