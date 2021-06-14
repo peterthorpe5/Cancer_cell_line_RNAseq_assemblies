@@ -16,6 +16,11 @@ import logging
 import logging.handlers
 import sys
 import difflib
+from Bio import AlignIO # align those that fail
+from Bio.Alphabet import IUPAC, Gapped
+from Bio.Align import MultipleSeqAlignment
+from Bio import pairwise2
+from Bio.pairwise2 import format_alignment 
 
 
 VERSION = "find SNP locations: v0.01"
@@ -92,12 +97,17 @@ def get_args():
                           type=str,
                           help="the tab file to fill in. Input file")
 
-    optional.add_argument("--show_all", dest='show_all',
+    optional.add_argument("--show", dest='show',
                           action="store",
                           default="NO",
                           type=str,
-                          help="option to show the diff in those seq that fail " +
-                          "note difflib doesnt work for all seq, dont know why")
+                          help="show the changes in those that fail")
+
+    optional.add_argument("--align", dest='align',
+                          action="store",
+                          default="YES",
+                          type=str,
+                          help="show the alignment in those that fail")
 
     optional.add_argument("-h", "--help",
                           action="help",
@@ -147,6 +157,7 @@ def parse_snpeff_vcf(vcf):
                        FORMAT, unknown = line.split()
                 # print(INFO.split(";ANN=C|"))
                 try:
+                    # useful_info = INFO.split(";ANN=C|")[1]
                     useful_info = INFO.split(";ANN=")[1]
                     if (len(useful_info.split("|"))) < 4:
                         continue
@@ -160,6 +171,8 @@ def parse_snpeff_vcf(vcf):
                                                    POS, SNP_type,
                                                    SNP_impact)
                         gene_to_snp_type[gene_code].append(data)
+                        # BREAKING HERE!! GENE?
+                        # print(gene_code, SNP_type)
                     except:
                         continue
                 except:
@@ -390,20 +403,31 @@ if __name__ == '__main__':
                     seen_gene2.add(gene)
                     logger.warning("%s failed", gene)
                     logger.info("failed sequences: \nWT:\n%s \nALT:\n%s", wt_seq, alt_seq)
-
-                    # dont log this by default - too much info
-                    if args.show_all.upper() != "NO":
-                        # list comp to find all the changes
-                        # this is often the most complex changes that are not found above
+                    # list comp to find all the changes
+                    # this is often the most complex changes that are not found above
+                    if args.show.upper() != "NO":
                         output_list = [(s, count) for s in
-                                       enumerate(difflib.ndiff(wt_seq,
-                                                               alt_seq))
+                                       enumerate(difflib.ndiff(wt_seq, alt_seq))
                                        if s[0] != ' ']
-                        logger.info("%s has these changes:\n %s ",
-                                    gene, str(output_list))
-                    gene_description_location[gene].add("\tmany_chages_to_" +
-                                                        "detail_indels_or_difflib_err")
-                    continue
+                        logger.info("%s has these changes:\n %s ", gene, str(output_list))
+                        gene_description_location[gene].add("\tmany_chages_to_detail_indels_or_difflib_err")
+                    if args.align.upper() == "YES":
+                        alignments = pairwise2.align.globalxx(wt_seq, alt_seq)
+                        differences = []
+                        for alignment in alignments:
+                            print(format_alignment(*alignment))
+                        count = 0
+                        for wt, alt in zip(alignments[0][0],alignments[0][1]):
+                            count += 1
+                            if wt == alt:
+                                continue
+                            else:
+                                data = "POSS: %d\tWT: %s\tALT: %s" % (count, wt, alt)
+                                differences.append(data)
+                                print(differences)
+                            #logger.info("%s has these changes:\n %s ", gene, str(output_list))
+                            #gene_description_location[gene].add("\tmany_chages_to_detail_indels_or_difflib_err")
+                        continue
 
     logger.info("finished comparing. Will now output the data")
     for gene in alt_gene_names:

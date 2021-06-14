@@ -292,6 +292,7 @@ if __name__ == '__main__':
                  args.vcf, args. snp_vcf,
                  args.gff]
 
+    # check files exist or not
     for user_file in file_list:
         if not os.path.isfile(user_file):
            logger.warning("file not found: %s", user_file)
@@ -334,6 +335,11 @@ if __name__ == '__main__':
     gene_description_location = defaultdict(set)
     seen_gene = set()
     seen_gene2 = set()
+    
+    # lets write the alignmne to a file, generated in next loop
+    align_out = args.cancer_fa.split(".fa")[0] + "_vs_WT.align.fasta"
+    f_align = open(align_out, "w")
+
     # iterate through
     for gene_pos, info in gene_snp_location.items():
         gene, POS, REF, ALT = info.split()
@@ -360,10 +366,17 @@ if __name__ == '__main__':
         
         # use alignment to find differences
         alignments = pairwise2.align.globalxx(wt_seq, alt_seq)
+        # logger.info(format_alignment(*alignments[0]))
         differences = []
         pos = 0
         wt_gap = 0
         alt_gap = 0
+
+        # lets write the alignent to a file 
+        out_align = ">WT %s _vs_ cnacer %s\n" %(gene, gene)
+        f_align.write(out_align)
+        f_align.write(format_alignment(*alignments[0]))
+            
         for wt, alt in zip(alignments[0][0],alignments[0][1]):
             pos += 1
             if wt == alt:
@@ -452,7 +465,11 @@ if __name__ == '__main__':
                     continue
 
     logger.info("finished comparing. Will now output the data")
+    # iterated through the gene_names set and then write out the fasta with
+    # the altered description field. The alt field is the original + mutation infomrations.
+    # e.g. c_G336G|p_del111A|L*AGAVII||
     for gene in alt_gene_names:
+        # collect the relavant info from a dict. 
         alt_seq_record = alt_nt[gene]
         alt_seq_record_AA = ALT_gene_to_amino_acid[gene]
         alt_seq_record.seq = alt_seq_record_AA
@@ -463,7 +480,10 @@ if __name__ == '__main__':
             temp =  temp + entry
         alt_seq_record.description = alt_seq_record.description  + temp
         SeqIO.write(alt_seq_record, f_out, "fasta")
+
+    # close fasta out, close align out
     f_out.close()
+    f_align.close()
     logger.info("finished")
 
 
