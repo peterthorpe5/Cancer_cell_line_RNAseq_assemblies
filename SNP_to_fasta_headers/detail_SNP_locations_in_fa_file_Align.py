@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# title: Put SNP info in fasta description
+# title: Put SNP info in fasta description, keep original description
 # (c) The James Hutton Institute 2021
 # Author: Peter Thorpe
 
