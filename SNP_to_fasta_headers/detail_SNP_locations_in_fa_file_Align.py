@@ -20,8 +20,10 @@ from Bio import AlignIO # align those that fail
 from Bio.Alphabet import IUPAC, Gapped
 from Bio.Align import MultipleSeqAlignment
 from Bio import pairwise2
-from Bio.pairwise2 import format_alignment 
+from Bio.pairwise2 import format_alignment
 
+# NOTE: converting NCBI human gene names to uniport:
+# https://www.biostars.org/p/429062/
 
 VERSION = "find SNP locations: v0.01"
 if "-v" in sys.argv or "--version" in sys.argv:
@@ -60,7 +62,7 @@ def get_args():
     optional = parser.add_argument_group('optional arguments')
     optional.add_argument("--wt", dest='wt',
                           action="store",
-                          default="Homo_sapiens.GRCh38.cds.all.fa2",
+                          default="Homo_sapiens.GRCh38.cds.all.fa",
                           type=str,
                           help="the ref human proteins ")
 
@@ -108,6 +110,18 @@ def get_args():
                           default="YES",
                           type=str,
                           help="show the alignment in those that fail")
+
+    optional.add_argument("--remove_no_mut_genes", dest='remove_no_mut_genes',
+                          action="store",
+                          default="YES",
+                          type=str,
+                          help="do not output genes that are the same as reference")
+
+    optional.add_argument("--min_len", dest='min_len',
+                          action="store",
+                          default=12,
+                          type=int,
+                          help="min len of AA seq to return. Some are as short as 2. We dont want these. ")
 
     optional.add_argument("-h", "--help",
                           action="help",
@@ -199,7 +213,33 @@ def parse_vcf(vcf):
     return gene_snp_location
 
 
-def parse_gene_info(gene_info, in_dict):
+def parse_NCBI_to_SP(infile, in_dict):
+    """parse the file populate the dict"""
+    with open(infile, 'r') as in_file:
+        for line in in_file:
+            if test_line(line):
+                data = line.split("\t")
+                ensem_gene_id= data[0]
+                unipr_gn_id = ""
+                if len(data) >=4:
+                    unipr_gn_id = data[4]
+                    unipr_gn_id = unipr_gn_id.rstrip()
+                in_dict[ensem_gene_id] = unipr_gn_id
+    return in_dict
+
+
+def parse_swiss_p_names(infile, in_dict):
+    """parse the file populate the dict"""
+    with open(infile, 'r') as in_file:
+        for line in in_file:
+            if test_line(line):
+                data = line.split("|")
+                sw_gn_id = data[1]
+                in_dict[sw_gn_id] = line
+    return in_dict
+
+
+def parse_gene_info(gene_info, transcript_to_gene, in_dict):
     """column 9 of the human gff.
 eg: ID=gene:ENSG00000187961;Name=KLHL17;biotype=protein_coding;
 description=kelch like family member 17
@@ -212,13 +252,17 @@ logic_name=ensembl_havana_gene_homo_sapiens;version=14
 
     returns a dictionary. gen name to actual name
     """
+
     data = gene_info.split(";")
     transcript = data[0].replace("ID=transcript:", "")
     gene = data[1].replace("Parent=gene:", "")
     name = data[2].replace("Name=", "")
     in_dict[transcript] = name
     in_dict[gene] = name
-    return in_dict
+    transcript_to_gene[gene] = transcript
+    transcript_to_gene[transcript] = gene
+    return in_dict, transcript_to_gene
+
 
 
 def parse_gff(gff):
@@ -226,6 +270,7 @@ def parse_gff(gff):
     s..."""
     # iterate through gff
     gene_to_name = defaultdict(str)
+    transcript_to_gene = defaultdict(str)
     f_in = open(gff)
     for line in f_in:
         if line.startswith("#"):
@@ -235,8 +280,10 @@ def parse_gff(gff):
         scaffold, prog, cds_type, start, stop, dot, direction, \
                   phase, gene_info = line.split("\t")
         if cds_type == "mRNA":
-            gene_to_name = parse_gene_info(gene_info, gene_to_name)
-    return gene_to_name
+            gene_to_name, transcript_to_gene = parse_gene_info(gene_info,
+                                                               transcript_to_gene,
+                                                               gene_to_name)
+    return gene_to_name, transcript_to_gene
 
 
 def translate(sequences):
@@ -246,11 +293,40 @@ def translate(sequences):
     [gene] = amino_acid_seq
     """
     gene_to_amino_acid = defaultdict(str)
+    transcript_to_gene = defaultdict(str)
+    gene_to_transcript = defaultdict(str)
     gene_names = []
     for seq_record in SeqIO.parse(sequences, "fasta"):
         gene_to_amino_acid[seq_record.id] = seq_record.seq.translate()
         gene_names.append(seq_record.id)
-    return gene_to_amino_acid, gene_names
+        elements = seq_record.description.split(" ")
+        for i in elements:
+            if "gene:" in i:
+                gene = i.split("gene:")[1]
+                transcript_to_gene[seq_record.id] = gene
+                transcript_to_gene[seq_record.id] = gene.split(".")[0]
+                gene_to_transcript[gene] = seq_record.id
+                gene_to_transcript[gene] = seq_record.id.split(".")[0]
+
+    return gene_to_amino_acid, gene_names, transcript_to_gene, gene_to_transcript
+
+
+def return_codon(seq, pos):
+    """func to return the codon of the nt snp of interest
+    takes in :
+    sequnce of interest. The post (int) of the nt SNP.
+    return the codon, positionally aware of where the SNP was.
+    """
+    if pos %3 == 0:
+        # this SNP is the first position in the codon
+        return seq[pos:(pos+3)]
+    if pos %3 == 1:
+        # this SNP is the 2nd position in the codon
+        return seq[(pos -1):(pos+2)]
+    if pos %3 == 2:
+        # this SNP is the 3nd/last position in the codon
+        return seq[(pos -2):(pos+1)]
+
 
 
 # get the agrs
@@ -297,10 +373,25 @@ if __name__ == '__main__':
         if not os.path.isfile(user_file):
            logger.warning("file not found: %s", user_file)
            os._exit(0)
-    # collect data for the WT .fa
 
+    # create a dictionary of NCBI gene to uniprot names
+    NCBI_to_prot_file = os.path.join("db", "NCBI_to_uniport.txt")
+    NCBI_to_prot_dict = defaultdict(str)
+
+    NCBI_to_prot_dict = parse_NCBI_to_SP(NCBI_to_prot_file,
+                                         NCBI_to_prot_dict)
+    prot_file = os.path.join("db", "swiss_prot_ids")
+    description_to_swiss_id = defaultdict(str)
+
+
+    description_to_swiss_id = parse_swiss_p_names(prot_file,
+                                                  description_to_swiss_id)
+
+    logger.info("swiss prot names loaded")
+    # collect data for the WT .fa
     logger.info("Indexing... %s", args.wt)
     wt_nt =  SeqIO.index(args.wt, "fasta")
+
     # collect data for the reconstructed .fa
     logger.info("Indexing... %s", args.cancer_fa)
     alt_nt =  SeqIO.index(args.cancer_fa, "fasta")
@@ -318,12 +409,14 @@ if __name__ == '__main__':
 
 
     logger.info("parsing gff file")
-    gene_to_name = parse_gff(args.gff)
+    gene_to_name, transcript_to_gene_name = parse_gff(args.gff)
 
     # collect the REF protein seq
-    REF_gene_to_amino_acid, wt_gene_names = translate(args.wt)
+    REF_gene_to_amino_acid, wt_gene_names, \
+            transcript_to_gene, gene_to_transcript = translate(args.wt)
     # collect the ALT protein seq
-    ALT_gene_to_amino_acid, alt_gene_names = translate(args.cancer_fa)
+    ALT_gene_to_amino_acid, alt_gene_names, \
+            transcript_to_gene, gene_to_transcript = translate(args.cancer_fa)
 
     # iterate through the genes and compare what bcftools did
     # bcftools will not output all variants, so using vcf here
@@ -335,12 +428,18 @@ if __name__ == '__main__':
     gene_description_location = defaultdict(set)
     seen_gene = set()
     seen_gene2 = set()
-    
+    logger.info("sets set up")
+
     # lets write the alignmne to a file, generated in next loop
     align_out = args.cancer_fa.split(".fa")[0] + "_vs_WT.align.fasta"
     f_align = open(align_out, "w")
+    logger.info("outfiles set up")
+
+    # debug file to extract the nucleotide variant responsible.
+    debug = open("debug.txt", "w")
 
     # iterate through
+    logger.info("now to iterate through")
     for gene_pos, info in gene_snp_location.items():
         gene, POS, REF, ALT = info.split()
         if gene in seen_gene:
@@ -348,6 +447,8 @@ if __name__ == '__main__':
         seen_gene.add(gene)
 
         # get the nucleotide seqs
+        if not gene in wt_nt:
+            continue
         wt_seq = wt_nt[gene]
         wt_sequence = str(wt_seq.seq)
 
@@ -363,7 +464,7 @@ if __name__ == '__main__':
         if wt_seq.upper() == alt_seq.upper():
             gene_description_location[gene].add("\tno_amino_acid_change")
             continue
-        
+
         # use alignment to find differences
         alignments = pairwise2.align.globalxx(wt_seq, alt_seq)
         # logger.info(format_alignment(*alignments[0]))
@@ -372,11 +473,11 @@ if __name__ == '__main__':
         wt_gap = 0
         alt_gap = 0
 
-        # lets write the alignent to a file 
+        # lets write the alignent to a file
         out_align = ">WT %s _vs_ cnacer %s\n" %(gene, gene)
         f_align.write(out_align)
         f_align.write(format_alignment(*alignments[0]))
-            
+
         for wt, alt in zip(alignments[0][0],alignments[0][1]):
             pos += 1
             if wt == alt:
@@ -392,7 +493,7 @@ if __name__ == '__main__':
             #print(differences)
         for change in differences:
             pos, wt, alt, wt_gap, alt_gap = change.split("\t")
-            count = int(pos) - 1            
+            count = int(pos) - 1
             try:
                 count = count -1 # for indexing
                 wt_seq[count] # for some reason sometimes this is beyond len(gene)
@@ -403,7 +504,7 @@ if __name__ == '__main__':
                     wt = "del"
                 if alt == "-":
                     alt = "del"
-                    
+
                 protien_sub = "p_%s%d%s" % (wt, count,
                                             alt)
                 nt_count = (count +1)*3
@@ -411,9 +512,26 @@ if __name__ == '__main__':
                                            nt_count,
                                            alt_sequence[nt_count])
                 # nucleo_sub = "" # this doesnt work due to "-" in alignments
-                
+
                 # seq of interest would be the alt, right?
                 seq_of_int = alt_seq[count - 4: count + 4]
+                original_seq = wt_seq[count - 4: count + 4]
+
+                #################################################################
+                # debug to find correct nt seq
+                wt_codon = return_codon(wt_sequence, nt_count)
+                alt_codon = return_codon(alt_sequence, nt_count)
+
+                part1 = "gene: %s\tWT: %s\tALT: %s\t nt_pos:\t%d\t" % (gene,
+                                                        wt, alt, nt_count)
+                part2 = "nt:\t%s\torignal: %s\t alt:\t%s\t" % (wt_sequence[nt_count],
+                                                        original_seq, seq_of_int)
+                part3 = "original_codon:\t%s alt_codon:\t%s\n" % (wt_codon, alt_codon)
+
+                debug_out = part1 + part2 + "\n" # + part3
+
+                debug.write(debug_out)
+
                 # need to get the stupid other names
                 # print(gene.split(".")[0])
                 name = gene_to_name[gene.split(".")[0]]
@@ -459,7 +577,7 @@ if __name__ == '__main__':
                         else:
                             data = "POSS: %d\tWT: %s\tALT: %s" % (count, wt, alt)
                             differences.append(data)
-                            print(differences)
+                            # print(differences)
                         #logger.info("%s has these changes:\n %s ", gene, str(output_list))
                         #gene_description_location[gene].add("\tmany_chages_to_detail_indels_or_difflib_err")
                     continue
@@ -469,21 +587,50 @@ if __name__ == '__main__':
     # the altered description field. The alt field is the original + mutation infomrations.
     # e.g. c_G336G|p_del111A|L*AGAVII||
     for gene in alt_gene_names:
-        # collect the relavant info from a dict. 
+        # collect the relavant info seq_record from a dict.
         alt_seq_record = alt_nt[gene]
+        # Do some dict playing to get the swiss port description.
+        # print(transcript_to_gene_name)
+        # use dict: e.g transc to prot {'ENST00000622053.4': 'ENSG00000276849'}
+        protein_name = transcript_to_gene[gene]
+        # print("NCBI_protein_name", protein_name)
+        # get the swiss prot name
+        Swi_pro_g_Id = NCBI_to_prot_dict[protein_name]
+        # print("Swi_pro_g_Id", Swi_pro_g_Id)
         alt_seq_record_AA = ALT_gene_to_amino_acid[gene]
         alt_seq_record.seq = alt_seq_record_AA
         # print(alt_seq_record)
+        # collect the SNP info
         SNP_info = gene_description_location[gene]
+        alt_seq_record.description = alt_seq_record.description.replace(" ", " | ")
+        #alt_seq_record.description = alt_seq_record.description.split("[Source:")[0]
         temp = ""
+        if SNP_info == set():
+            continue
         for entry in SNP_info:
-            temp =  temp + entry
-        alt_seq_record.description = alt_seq_record.description  + temp
-        SeqIO.write(alt_seq_record, f_out, "fasta")
+            temp =  temp + entry.strip()
+        if Swi_pro_g_Id in description_to_swiss_id:
+            if len(Swi_pro_g_Id) > 5:
+                # the len checks this is not just a "" result
+                # assign the swiss prot des to the id.
+                swss_prot_descipt = description_to_swiss_id[Swi_pro_g_Id]
+                alt_seq_record.id = description_to_swiss_id[Swi_pro_g_Id]
+                # add the "temp" which is the snp info to the end
+                alt_seq_record.description =  " | " + temp
+        else:
+            # there is not direct swiss prot for this one. Add the
+            # snp info to the end. 
+            alt_seq_record.description =  alt_seq_record.description + " | " + temp
+        # removing any proteins seq where there was no change, only keep those where there
+        # was a change identifed in the alingmnet. 
+        if  "no_amino_acid_change"  not in alt_seq_record.description or temp == "":
+            if len(alt_seq_record.seq) > args.min_len:
+                SeqIO.write(alt_seq_record, f_out, "fasta")
 
     # close fasta out, close align out
     f_out.close()
     f_align.close()
+    debug.close()
     logger.info("finished")
 
 
