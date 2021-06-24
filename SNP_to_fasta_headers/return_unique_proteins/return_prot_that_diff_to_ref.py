@@ -441,6 +441,7 @@ if __name__ == '__main__':
     # iterate through
     logger.info("now to iterate through")
     written_set = set([])
+    failed_set =  set([])
     for wt_record in SeqIO.parse(args.wt, "fasta"):
         
         gene = wt_record.id
@@ -560,6 +561,7 @@ if __name__ == '__main__':
                 except:
                     this_fails = "warning %s fails" % gene #  usually here - if not wt_seq[count]:
                     logger.info(this_fails)
+                    failed_set.add(wt_record)
                 alt_seq_record_AA = ALT_gene_to_amino_acid[gene]
                 # get the swiss prot gene name from the NCBI transcript name
                 swiss_prt = NCBI_to_prot_dict[wt_record.id.split(".")[0]]
@@ -581,11 +583,39 @@ if __name__ == '__main__':
                 if gene not in written_set:
                     print("writing .. %s" % gene)
                     wt_record.id = wt_record.id.replace("|   |  |", "|")
-                    wt_record.description = wt_record.description.replace("|   |  |", "|")
+                    temp = wt_record.description
+                    wt_record.description = temp.replace("|   |  |", "|")
                     SeqIO.write(wt_record, f_out, "fasta")
                     written_set.add(gene)
 
 
+    logger.info("writting out the failed alignment seqs")
+    for wt_record in failed_set:
+        gene = wt_record.id
+        alt_seq_record_AA = ALT_gene_to_amino_acid[gene]
+        # get the swiss prot gene name from the NCBI transcript name
+        swiss_prt = NCBI_to_prot_dict[wt_record.id.split(".")[0]]
+        # get the swiss prot info:
+        swiss_prto_info = description_to_swiss_id[swiss_prt]
+        if swiss_prto_info != "":
+            wt_record.id = swiss_prto_info + " | ALIGNMENT_FAIL_COMLEX_CHANGES |"
+        #remove the extra info as requested.
+        temp = str(wt_record.description)
+        try:
+            temp = temp.split(" description:")[1]
+            temp = temp.split("[Source:")[0]
+        except:
+            temp = ""
+        # swap the AA seq for the variant type. 
+        wt_record.seq =  alt_seq_record_AA
+        if len(wt_record.seq) > args.min_len:
+            if gene not in written_set:
+                print("writing .. %s" % gene)
+                wt_record.id = wt_record.id.replace("|   |  |", "|")
+                temp = wt_record.description
+                wt_record.description = temp.replace("|   |  |", "|")
+                SeqIO.write(wt_record, f_out, "fasta")
+                written_set.add(gene)
     # close fasta out, close align out
     f_out.close()
     f_align.close()
