@@ -17,10 +17,10 @@ import logging.handlers
 import sys
 import difflib
 from Bio import AlignIO # align those that fail
-from Bio.Alphabet import IUPAC, Gapped
 from Bio.Align import MultipleSeqAlignment
 from Bio import pairwise2
 from Bio.pairwise2 import format_alignment
+from Bio.Align import substitution_matrices
 
 # NOTE: converting NCBI human gene names to uniport:
 # https://www.biostars.org/p/429062/
@@ -47,7 +47,7 @@ to see the help: python detail_SNP_locations_in_fa_file.py -h
 takes in the cds nt .fa for the human ref
 and the reconstructed fa from a vcf. Plus the vcf used.
 
-requires: Biopython, python 3.X. currently uses less than 1GB RAM
+requires: Biopython, python 3.X. currently uses less than 2GB RAM
 """ % VERSION
 
 if "--help" or "-h" in sys.argv:
@@ -440,8 +440,9 @@ if __name__ == '__main__':
 
     # iterate through
     logger.info("now to iterate through")
-
+    written_set = set([])
     for wt_record in SeqIO.parse(args.wt, "fasta"):
+        
         gene = wt_record.id
 
         # get the nucleotide seqs
@@ -461,7 +462,12 @@ if __name__ == '__main__':
 
         if wt_seq.upper() != alt_seq.upper():
             # use alignment to find differences
-            alignments = pairwise2.align.globalxx(wt_seq, alt_seq)
+            blosum62 = substitution_matrices.load("BLOSUM62")
+            # see: https://github.com/biopython/biopython/issues/3634
+            # ds not xx
+            # blosum62, -10, -0.5
+            alignments = pairwise2.align.globalds(wt_seq, alt_seq, blosum62, -10, -1)
+
             # logger.info(format_alignment(*alignments[0]))
             differences = []
             pos = 0
@@ -471,7 +477,7 @@ if __name__ == '__main__':
             # lets write the alignent to a file
             out_align = ">WT (top) %s _vs_ cnacer %s\n" %(gene, gene)
             f_align.write(out_align)
-            f_align.write(format_alignment(*alignments[0]))
+            f_align.write(format_alignment(*alignments[0], full_sequences=True))
 
             for wt, alt in zip(alignments[0][0],alignments[0][1]):
                 pos += 1
@@ -484,6 +490,9 @@ if __name__ == '__main__':
                         alt_gap += 1
                     data = "%d\t%s\t%s\t%d\t%d" % (pos, wt, alt,
                                                    wt_gap, alt_gap)
+                    #if wt != "-" or alt != "-":
+                        #muta_info = ("WT\t%s\tALT\t%s" % (wt, alt))
+                        #print(muta_info)
                     differences.append(data)
                 #print(differences)
             protien_sub = ""
@@ -495,14 +504,14 @@ if __name__ == '__main__':
                     count = count -1 # for indexing
                     wt_seq[count] # for some reason sometimes this is beyond len(gene)
 
-                    if wt_seq[count] == alt_seq[count]: # sometimes it is lying to me!!
-                        continue
+                    #if wt_seq[count] == alt_seq[count]: # sometimes it is lying to me!!
+                        #continue
                     if wt == "-":
                         wt = "del"
                     if alt == "-":
                         alt = "del"
 
-                    protien_s = "p_%s%d%s | " % (wt, count,
+                    protien_s = "p_%s%d%s " % (wt, count,
                                               alt)
                     protien_sub =  protien_sub + protien_s
                     nt_count = (count +1)*3
@@ -549,7 +558,8 @@ if __name__ == '__main__':
                     gene_description_location[gene].add(out_data)
 
                 except:
-                    this_fails = "warning" #  usually here - if not wt_seq[count]:
+                    this_fails = "warning %s fails" % gene #  usually here - if not wt_seq[count]:
+                    logger.info(this_fails)
                 alt_seq_record_AA = ALT_gene_to_amino_acid[gene]
                 # get the swiss prot gene name from the NCBI transcript name
                 swiss_prt = NCBI_to_prot_dict[wt_record.id.split(".")[0]]
@@ -567,8 +577,12 @@ if __name__ == '__main__':
                 wt_record.description = " | " + temp  + " | " + out_data
                 # swap the AA seq for the variant type. 
                 wt_record.seq =  alt_seq_record_AA
-                if len(wt_record.seq) > args.min_len:
+            if len(wt_record.seq) > args.min_len:
+                if gene not in written_set:
+                    print("writing .. %s" % gene)
+                    wt_record.description = wt_record.description.replace("|   |  | " "|")
                     SeqIO.write(wt_record, f_out, "fasta")
+                    written_set.add(gene)
 
 
     # close fasta out, close align out
