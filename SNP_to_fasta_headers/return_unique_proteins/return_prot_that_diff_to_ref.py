@@ -580,7 +580,8 @@ if __name__ == '__main__':
             if len(wt_record.seq) > args.min_len:
                 if gene not in written_set:
                     print("writing .. %s" % gene)
-                    wt_record.description = wt_record.description.replace("|   |  | ", "|")
+                    wt_record.id = wt_record.id.replace("|   |  |", "|")
+                    wt_record.description = wt_record.description.replace("|   |  |", "|")
                     SeqIO.write(wt_record, f_out, "fasta")
                     written_set.add(gene)
 
