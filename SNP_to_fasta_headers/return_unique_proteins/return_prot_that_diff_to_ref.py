@@ -476,7 +476,7 @@ if __name__ == '__main__':
             alt_gap = 0
 
             # lets write the alignent to a file
-            out_align = ">WT (top) %s _vs_ cnacer %s\n" %(gene, gene)
+            out_align = ">WT (top) %s _vs_ cancer %s\n" %(gene, gene)
             f_align.write(out_align)
             f_align.write(format_alignment(*alignments[0], full_sequences=True))
 
@@ -561,7 +561,7 @@ if __name__ == '__main__':
                 except:
                     this_fails = "warning %s fails" % gene #  usually here - if not wt_seq[count]:
                     logger.info(this_fails)
-                    failed_set.add(wt_record)
+                    failed_set.add(wt_record.id)
                 alt_seq_record_AA = ALT_gene_to_amino_acid[gene]
                 # get the swiss prot gene name from the NCBI transcript name
                 swiss_prt = NCBI_to_prot_dict[wt_record.id.split(".")[0]]
@@ -590,15 +590,16 @@ if __name__ == '__main__':
 
 
     logger.info("writting out the failed alignment seqs")
-    for wt_record in failed_set:
+    for wt_record.id in failed_set:
         gene = wt_record.id
+        wt_record = wt_nt[gene]
         alt_seq_record_AA = ALT_gene_to_amino_acid[gene]
         # get the swiss prot gene name from the NCBI transcript name
         swiss_prt = NCBI_to_prot_dict[wt_record.id.split(".")[0]]
         # get the swiss prot info:
         swiss_prto_info = description_to_swiss_id[swiss_prt]
         if swiss_prto_info != "":
-            wt_record.id = swiss_prto_info + " | ALIGNMENT_FAIL_COMLEX_CHANGES |"
+            wt_record.id = swiss_prto_info + " | ALIGNMENT_FAIL_COMPLEX_CHANGES |"
         #remove the extra info as requested.
         temp = str(wt_record.description)
         try:
