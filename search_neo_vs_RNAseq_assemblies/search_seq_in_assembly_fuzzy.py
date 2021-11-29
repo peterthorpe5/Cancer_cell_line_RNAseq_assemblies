@@ -22,6 +22,7 @@ from Bio.Seq import Seq
 from Bio import SeqIO
 from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
+from collections import defaultdict
 
 
 def parse_write_out6frame(infasta, outfasta):
@@ -45,6 +46,29 @@ def parse_write_out6frame(infasta, outfasta):
                         f_out, 'fasta')
     f_out.close()
 
+def parse_blast(blast):
+    " func to parse tab blast file. retrun a dict"
+    trans_to_gene = defaultdict()
+    trans_evalue = defaultdict()
+    with open(blast) as fh:
+        for line in fh:
+            data = line.split("\t")
+            trans = data[0]
+            human = data[1]
+            evalue = data[-2]
+            trans_to_gene[trans] = human
+            trans_evalue[trans] = evalue.rstrip()
+    return trans_to_gene, trans_evalue
+       
+       
+def parse_fa(fa):
+    " func to parse tab blast file. retrun a dict"
+    gene_to_desctiption = defaultdict()
+    for seq_record in SeqIO.parse(fa, "fasta"):
+        gene_to_desctiption[seq_record.id] = seq_record.description
+    return gene_to_desctiption
+    
+
 def split_seq_into_peptide_size_chunks(string, slice_len=10):
     size = len(string)
     chunks_list = []
@@ -57,14 +81,17 @@ def split_seq_into_peptide_size_chunks(string, slice_len=10):
         start =  start + 1
         chunks_list.append(slice)
    
-def fa_out6frame(fasta, cell_neoep, logger):
+   
+def fa_out6frame(outfile, cell_neoep, trans_to_gene, 
+                trans_evalue, gene_to_desctiption, logger):
     """func to parse the 6 frame trans
      the name  """
     collect_hits = set([])
     cell_neo = dict()
     neo_set = set([])
     data = []
-    filename = fasta
+    filename = outfile
+    fasta = outfile
     out_set = set([])
     for entry in cell_neoep:
         line, neo = entry.split("\t")
@@ -79,9 +106,20 @@ def fa_out6frame(fasta, cell_neoep, logger):
             temp = peptide.rstrip()
             test_pep = Seq(peptide)
             if peptide in seq_record.seq:
-                result = "\t".join(["line: ", cell_line, "peptide",
-                            peptide, "hit in", filename, 
-                            seq_record.id, seq_record.description, 
+                human_prot = trans_to_gene[seq_record.id]
+                annot = gene_to_desctiption[human_prot] 
+                evalue = trans_evalue[seq_record.id]
+                result = "\t".join(["cell line: ", 
+                                    cell_line, "peptide",
+                                    peptide, "hit in", filename, 
+                                    seq_record.id, "SWISS_prot_id",
+                                    human_prot,
+                                    "ANNOTATION",
+                                    annot,
+                                    "Evalue_of_hit",
+                                    evalue,
+                                    "DE_NOVO_assembly_info", 
+                                    seq_record.description, 
                             str(data)])
                 if result not in out_set:
                     logger.info(result)
@@ -150,6 +188,18 @@ parser.add_option("-i",
                   help="de novo assembly" +
                   " Mutated Sequence  and Peptide Sequence.")
 
+parser.add_option("-b",
+                  dest="in_blast",
+                  default=None,
+                  help="tab blast output" +
+                  " to ge tthe top hits.")
+
+parser.add_option("-r",
+                  dest="fa",
+                  default="UP000005640_9606.fasta",
+                  help="human proteome" +
+                  " to ge tthe top hits description.")
+
 parser.add_option("-o", "--out",
                   dest="outfile",
                   default=None,
@@ -160,6 +210,8 @@ parser.add_option("-o", "--out",
 (options, args) = parser.parse_args()
 in_fasta = options.in_fasta
 outfile = options.outfile
+in_blast = options.in_blast
+fa = options.fa
 
 logfile = in_fasta.split(".xa")[0] + ".log"
 
@@ -194,9 +246,14 @@ if __name__ == '__main__':
     logger.info("translating sequences")
     # parse_write_out6frame(in_fasta, outfile)
     logger.info("line to peptide info")
+    # parse blast file to get the top hit
+    trans_to_gene, trans_evalue = parse_blast(in_blast)
+    # parse the fasts file to get the desciptions. 
+    gene_to_desctiption = parse_fa(fa)
     # logger.info(cell_neoep)
     logger.info("searching sequences")
-    fa_out6frame(outfile, cell_neoep, logger)
+    fa_out6frame(outfile, cell_neoep, trans_to_gene, 
+                trans_evalue, gene_to_desctiption, logger)
 
 cmd = """
 python search_seq_in_assembly_fuzzy.py -i HCC_1806_trinity.Trinity.fasta -o HCC_1806_trinity_6frame
@@ -206,12 +263,14 @@ python search_seq_in_assembly_fuzzy.py -i HCC1954_trinity.Trinity.fasta -o HCC19
 python search_seq_in_assembly_fuzzy.py -i MDAMB415_trinity.Trinity.fasta -o MDAMB415_trinity_6frame
 
 
-python search_seq_in_assembly_fuzzy.py -i HCC_1806_trinity.Trinity.fasta.transdecoder.cds -o HCC_1806_trinity.Trinity.fasta.transdecoder.pep 
+# with blast hits
+python search_seq_in_assembly_fuzzy.py -b HCC_1806_vs_human_prot.tab -i HCC_1806_trinity.Trinity.fasta.transdecoder.cds -o HCC_1806_trinity.Trinity.fasta.transdecoder.pep 
 
-python search_seq_in_assembly_fuzzy.py -i MDAMB231_trinity.Trinity.fasta.transdecoder.cds -o MDAMB231_trinity.Trinity.fasta.transdecoder.pep
+python search_seq_in_assembly_fuzzy.py -b MDAMB231_vs_human_prot.tab -i MDAMB231_trinity.Trinity.fasta.transdecoder.cds -o MDAMB231_trinity.Trinity.fasta.transdecoder.pep
 
-python search_seq_in_assembly_fuzzy.py -i HCC1954_trinity.Trinity.fasta.transdecoder.cds -o HCC1954_trinity.Trinity.fasta.transdecoder.pep 
+python search_seq_in_assembly_fuzzy.py -b HCC1954_vs_human_prot.tab -i HCC1954_trinity.Trinity.fasta.transdecoder.cds -o HCC1954_trinity.Trinity.fasta.transdecoder.pep 
 
-python search_seq_in_assembly_fuzzy.py -i MDAMB453_trinity.Trinity.fasta.transdecoder.cds -o MDAMB453_trinity.Trinity.fasta.transdecoder.pep 
+python search_seq_in_assembly_fuzzy.py -b MDAMB453_vs_human_prot.tab -i MDAMB453_trinity.Trinity.fasta.transdecoder.cds -o MDAMB453_trinity.Trinity.fasta.transdecoder.pep 
+
 
 """
