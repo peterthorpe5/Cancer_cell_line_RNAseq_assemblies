@@ -87,7 +87,7 @@ def fa_out6frame(outfile, cell_neoep, trans_to_gene,
     """func to parse the 6 frame trans
      the name  """
     collect_hits = set([])
-    cell_neo = dict()
+    cell_neo = defaultdict()
     neo_set = set([])
     data = []
     filename = outfile
@@ -106,9 +106,14 @@ def fa_out6frame(outfile, cell_neoep, trans_to_gene,
             temp = peptide.rstrip()
             test_pep = Seq(peptide)
             if peptide in seq_record.seq:
-                human_prot = trans_to_gene[seq_record.id]
-                annot = gene_to_desctiption[human_prot] 
-                evalue = trans_evalue[seq_record.id]
+                try:
+                    human_prot = trans_to_gene[seq_record.id]
+                    annot = gene_to_desctiption[human_prot] 
+                    evalue = trans_evalue[seq_record.id]
+                except:
+                    human_prot = ""
+                    annot = ""
+                    evalue = ""
                 result = "\t".join(["cell line: ", 
                                     cell_line, "peptide",
                                     peptide, "hit in", filename, 
@@ -142,18 +147,19 @@ def fa_out6frame(outfile, cell_neoep, trans_to_gene,
                 #collect_hits.add(result)
          
 
-cell_neoep = """HCC 1806	RQVTSSGVSY
-HCC 1806	RQYLQEVGY
-HCC 1806	ESGPSIVHR
-HCC 1954	YPDRIMNTF
-HCC 1954	KYILSNANLF
-HCC 1954	KAYHEQLTV
-HCC 1954	FEQEMATAA
+cell_neoep = """HCC 1395	AEIGSMFTA
+HCC 1395	QEFEFRVGA
+HCC 1395	YLLEKSQVI
+HCC 1395	YLLEKSQVL
+HCC 1806	FKTNTQTY
+HCC 1806	RQVTSSGVSY
 HCC 1954	EYPDRIMNTF
+HCC 1954	KAYHEQLTV
+HCC 1954	YPDRIMNTF
+MCF7	SLAQYLINV
 MDA-MB-231	KYLDEDTIYHL
-MDA-MB-415	DEFNVQVL
-MDA-MB-415	DNFLMGIGR
-MDA-MB-415	ENIIFEEY
+MDA-MB-415	DELFHDVAY
+MDA-MB-415	TVMYVAGAF
 MDA-MB-453	LLDSSQKNLY""".split("\n")
 
 
@@ -213,7 +219,7 @@ outfile = options.outfile
 in_blast = options.in_blast
 fa = options.fa
 
-logfile = in_fasta.split(".xa")[0] + ".log"
+logfile = in_fasta.split(".xa")[0] + "_neoantigens_CL_noI_L_sub.log"
 
 # Run as script
 if __name__ == '__main__':
@@ -264,17 +270,20 @@ python search_seq_in_assembly_fuzzy.py -i MDAMB415_trinity.Trinity.fasta -o MDAM
 
 
 # with blast hits
-python search_seq_in_assembly_fuzzy.py -b HCC_1806_vs_human_prot.tab -i HCC_1806_trinity.Trinity.fasta.transdecoder.cds -o HCC_1806_trinity.Trinity.fasta.transdecoder.pep 
+python search_seq_in_assembly_fuzzy2.py -b HCC_1806_vs_human_prot.tab -i HCC_1806_trinity.Trinity.fasta.transdecoder.cds -o HCC_1806_trinity.Trinity.fasta.transdecoder.pep 
 
-python search_seq_in_assembly_fuzzy.py -b MDAMB231_vs_human_prot.tab -i MDAMB231_trinity.Trinity.fasta.transdecoder.cds -o MDAMB231_trinity.Trinity.fasta.transdecoder.pep
+python search_seq_in_assembly_fuzzy2.py -b MDAMB231_vs_human_prot.tab -i MDAMB231_trinity.Trinity.fasta.transdecoder.cds -o MDAMB231_trinity.Trinity.fasta.transdecoder.pep
 
-python search_seq_in_assembly_fuzzy.py -b HCC1954_vs_human_prot.tab -i HCC1954_trinity.Trinity.fasta.transdecoder.cds -o HCC1954_trinity.Trinity.fasta.transdecoder.pep 
+python search_seq_in_assembly_fuzzy2.py -b HCC1954_vs_human_prot.tab -i HCC1954_trinity.Trinity.fasta.transdecoder.cds -o HCC1954_trinity.Trinity.fasta.transdecoder.pep 
 
-python search_seq_in_assembly_fuzzy.py -b MDAMB453_vs_human_prot.tab -i MDAMB453_trinity.Trinity.fasta.transdecoder.cds -o MDAMB453_trinity.Trinity.fasta.transdecoder.pep 
+python search_seq_in_assembly_fuzzy2.py -b MDAMB453_vs_human_prot.tab -i MDAMB453_trinity.Trinity.fasta.transdecoder.cds -o MDAMB453_trinity.Trinity.fasta.transdecoder.pep 
 
-python search_seq_in_assembly_fuzzy.py -b MDAMB415_GG.fasta.transdecoder.tab -i MDAMB415_GG.fasta.transdecoder.pep -o  MDAMB415_GG.fasta.transdecoder.pep
+python search_seq_in_assembly_fuzzy2.py -b MDAMB415_GG.fasta.transdecoder.tab -i MDAMB415_GG.fasta.transdecoder.pep -o  MDAMB415_GG.fasta.transdecoder.pep
 
-python search_seq_in_assembly_fuzzy.py -b MDAMB415.fasta.transdecoder.tab -i MDAMB415_trinity.Trinity.fasta.transdecoder.pep -o  MDAMB415_trinity.Trinity.fasta.transdecoder.pep
+python search_seq_in_assembly_fuzzy2.py -b MDAMB415.fasta.transdecoder.tab -i MDAMB415_trinity.Trinity.fasta.transdecoder.pep -o  MDAMB415_trinity.Trinity.fasta.transdecoder.pep
 
+python search_seq_in_assembly_fuzzy2.py -b MCF7.fasta.transdecoder.tab -i MCF7_trinity.Trinity.fasta.transdecoder.pep -o  MCF7_trinity.Trinity.fasta.transdecoder.pep
+
+python search_seq_in_assembly_fuzzy2.py -b HCC_1395.fasta.transdecoder.tab -i HCC_1395_trinity.Trinity.fasta.transdecoder.pep -o  HCC_1395_trinity.Trinity.fasta.transdecoder.pep
 
 """
